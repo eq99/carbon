@@ -1,2 +1,2 @@
-# helium
-Helium is a simple k-v store powered by Rust 
+# Kelp
+Kelp is a simple k-v store powered by Rust.
