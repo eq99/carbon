@@ -18,6 +18,8 @@ type Delta = (u16, u16, u16, u16);
 pub struct Differ<'a> {
     old_content: &'a str,
     new_content: &'a str,
+    old_total_line: u16,
+    new_total_line: u16,
     commons: Option<Vec<Common>>,
     deltas: Option<Vec<Delta>>,
 }
@@ -37,10 +39,12 @@ impl<'a> Differ<'a> {
         let mut new_line_num = 0;
         let mut idx = 0; // inner loop counter
         let mut odx = 0; // outer loop counter
-        let mut new_iter = new_content.chars().peekable();
+        let mut new_total_line = 0;
+        let mut old_total_line = 0;
+        let mut new_iter = new_content.lines().peekable();
         while (!new_iter.peek().is_none()) {
-            for (old_ch, new_ch) in old_content.chars().zip(new_iter.clone()) {
-                if old_ch == new_ch {
+            for (old_line, new_line) in old_content.lines().zip(new_iter.clone()) {
+                if old_line.len() == new_line.len() && old_line == new_line {
                     if common_len == 0 {
                         old_line_num = idx;
                         new_line_num = idx + odx;
@@ -58,14 +62,14 @@ impl<'a> Differ<'a> {
             odx += 1;
             idx = 0;
         }
-
+        new_total_line = odx;
         odx = 1;
         idx = 0;
         common_len = 0;
-        let mut old_iter = old_content.chars().skip(1).peekable();
+        let mut old_iter = old_content.lines().skip(1).peekable();
         while (!old_iter.peek().is_none()) {
-            for (new_ch, old_ch) in new_content.chars().zip(old_iter.clone()) {
-                if old_ch == new_ch {
+            for (new_line, old_line) in new_content.lines().zip(old_iter.clone()) {
+                if old_line.len() == new_line.len() && (old_line == new_line) {
                     if common_len == 0 {
                         old_line_num = odx + idx;
                         new_line_num = idx;
@@ -83,6 +87,8 @@ impl<'a> Differ<'a> {
             odx += 1;
             idx = 0;
         }
+        // fix odx offset
+        old_total_line = if old_content.len() > 0 { odx } else { 0 };
 
         /// After we get all common parts, we have to choose the useful parts.
         /// Here, we use a greedy policy:
@@ -111,6 +117,8 @@ impl<'a> Differ<'a> {
         Self {
             old_content: old_content,
             new_content: new_content,
+            old_total_line: old_total_line,
+            new_total_line: new_total_line,
             commons: Some(pickes),
             ..Default::default()
         }
@@ -124,13 +132,16 @@ impl<'a> Differ<'a> {
         if self.deltas.is_none() {
             let commons = self.commons.clone().unwrap();
             let mut deltas = vec![];
-            let old_content_len = self.old_content.len() as u16;
-            let new_content_len = self.new_content.len() as u16;
 
             if commons.len() < 1 {
-                // see test cases: from_scrath.
-                if old_content_len == 0 && new_content_len > 0 {
-                    self.deltas = Some(vec![(0, 0, 0, new_content_len)]);
+                if self.new_total_line > 0 {
+                    self.deltas = if self.old_total_line == 0 {
+                        // see test cases: from_scrath.
+                        Some(vec![(0, 0, 0, self.new_total_line)])
+                    } else {
+                        // changed all.
+                        Some(vec![(0, 0, self.old_total_line, self.new_total_line)])
+                    };
                     return self.deltas.clone();
                 } else {
                     panic!("new file should not be empty");
@@ -157,12 +168,12 @@ impl<'a> Differ<'a> {
             let last_ele = commons[commons.len() - 1];
             let end_old = last_ele.0 + last_ele.2;
             let end_new = last_ele.1 + last_ele.2;
-            if old_content_len > end_old || new_content_len > end_new {
+            if self.old_total_line > end_old || self.new_total_line > end_new {
                 deltas.push((
                     end_old,
                     end_new,
-                    old_content_len - end_old,
-                    new_content_len - end_new,
+                    self.old_total_line - end_old,
+                    self.new_total_line - end_new,
                 ));
             }
 
@@ -191,22 +202,29 @@ mod tests {
     use self::super::*;
     #[test]
     fn test_change() {
-        let mut differ_mid = Differ::new("abcdefg", "abxyzdefg");
+        let mut differ_mid = Differ::new("a\nb\nc\nd\ne\nf\ng\n", "a\nb\nx\ny\nz\nd\ne\nf\ng\n");
         println!("{:?}", differ_mid.gen_patch());
 
-        let mut remove_start = Differ::new("aabcdef", "abcdef");
+        let mut remove_start = Differ::new("a\na\nb\nc\nd\ne\nf", "a\nb\nc\nd\ne\nf\n");
         println!("{:?}", remove_start.gen_patch());
 
-        let mut add_tail = Differ::new("abcd", "abcdefgh");
+        let mut add_tail = Differ::new("a\nb\nc\nd\n", "a\nb\nc\nd\nf\ng\nh\n");
         println!("{:?}", add_tail.gen_patch());
 
-        let mut reverse = Differ::new("abcdef", "defabc");
+        let mut reverse = Differ::new("a\nb\nc\nd\ne\nf\n", "d\ne\nf\na\nb\nc\n");
         println!("{:?}", reverse.gen_patch());
 
-        let mut more_than_one = Differ::new("abcdefgh", "axcdyyefghkl");
+        let mut more_than_one = Differ::new(
+            "a\nb\nc\nd\ne\nf\ng\nh\n",
+            "a\nb\nx\nd\ny\ny\ne\nf\ng\nh\nk\nl\n",
+        );
         println!("{:?}", more_than_one.gen_patch());
 
-        let mut from_scratch = Differ::new("", "abc");
-        from_scratch.gen_patch();
+        let mut from_scratch = Differ::new("", "a\nb\nc\n");
+        println!("{:?}", from_scratch.gen_patch());
+
+        println!("{:?}", from_scratch);
+        let mut change_all = Differ::new("a\nb\n", "c\nd\n");
+        println!("{:?}", change_all.gen_patch());
     }
 }
