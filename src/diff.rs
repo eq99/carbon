@@ -24,6 +24,13 @@ pub struct Differ<'a> {
 
 impl<'a> Differ<'a> {
     pub fn new(old_content: &'a str, new_content: &'a str) -> Self {
+        /// algorithm notes:
+        /// 1. compare all sub string of old string with new string.
+        /// 2. compare all sub string of new string with old string symmetrically.
+        ///
+        /// To help you understand the edtor graph,
+        /// You can read paper: http://www.xmailserver.org/diff2.pdf
+        /// Fig 1. may help you a lot.
         let mut commons = vec![];
         let mut common_len = 0;
         let mut old_line_num = 0;
@@ -77,9 +84,10 @@ impl<'a> Differ<'a> {
             idx = 0;
         }
 
+        /// After we get all common parts, we have to choose the useful parts.
+        /// Here, we use a greedy policy:
+        /// choose the longer part first.
         commons.sort_by_key(|c| -(c.2 as i32)); // cast is safe.
-
-        // pick the good cases
         let mut pickes: Vec<Common> = vec![];
         let mut pickable = true;
         if let Some(c) = commons.get(0) {
@@ -88,7 +96,7 @@ impl<'a> Differ<'a> {
         for candidate in commons {
             for picked in &pickes {
                 pickable = ((candidate.0 + candidate.2 - 1 < picked.0
-                && candidate.1 + candidate.2 - 1 < picked.1) //top left
+                && candidate.1 + candidate.2 - 1 < picked.1) // top left
                 || (candidate.0 > picked.0 + picked.2 - 1
                     && candidate.1 > picked.1 + picked.2 - 1)) // bottom right
                 && pickable;
@@ -98,7 +106,7 @@ impl<'a> Differ<'a> {
             }
             pickable = true;
         }
-
+        /// After kick of useless part(with small probability),
         pickes.sort_by_key(|c| c.0);
         Self {
             old_content: old_content,
@@ -120,16 +128,15 @@ impl<'a> Differ<'a> {
             let new_content_len = self.new_content.len() as u16;
 
             if commons.len() < 1 {
-                // see test cases:
-                // from_scrath.
+                // see test cases: from_scrath.
                 if old_content_len == 0 && new_content_len > 0 {
                     self.deltas = Some(vec![(0, 0, 0, new_content_len)]);
                     return self.deltas.clone();
                 } else {
-                    panic!("file should not be empty");
+                    panic!("new file should not be empty");
                 }
             }
-
+            /// 0<-delta->commons[0]<-delta->commons[1]<-delta->...common_last<-delta->end
             if commons[0].0 > 0 || commons[0].1 > 0 {
                 deltas.push((0, 0, commons[0].0, commons[0].1));
             }
