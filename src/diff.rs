@@ -1,7 +1,7 @@
 #![allow(unused)]
 
 /// commons: the common lines of two files.
-/// 1<<16 = 65536, The lines file is enough.
+/// 2^16 = 65536, The number of lines in a file is enough.
 /// 0. start line number of common part in old file,
 /// 1. start line number of common part in new file,
 /// 2. length of the common part
@@ -182,17 +182,46 @@ impl<'a> Differ<'a> {
         self.deltas.clone()
     }
 
-    pub fn gen_patch(&mut self) {
+    pub fn gen_patch(&mut self) -> Option<String> {
         match self.get_deltas() {
             Some(deltas) => {
-                for delta in deltas {
-                    println!(
-                        "@@{},{}: --{} lines, ++{} lines",
-                        delta.0, delta.1, delta.2, delta.3
-                    );
+                if deltas.len() == 0 {
+                    return None;
                 }
+                let mut patches = vec![];
+                let old_line_iter = self.old_content.lines();
+                let new_line_iter = self.new_content.lines();
+                for delta in deltas {
+                    let removes: Vec<_> = old_line_iter
+                        .clone()
+                        .skip(delta.0 as usize)
+                        .take(delta.2 as usize)
+                        .collect();
+                    let adds: Vec<_> = new_line_iter
+                        .clone()
+                        .skip(delta.0 as usize)
+                        .take(delta.3 as usize)
+                        .collect();
+
+                    patches.push((delta.0, delta.2, delta.3, removes, adds))
+                }
+                let mut patch_file = String::from("");
+                for patch in patches {
+                    patch_file = format!("{}{},{},{}\n", patch_file, patch.0, patch.1, patch.2);
+                    if patch.1 != 0 {
+                        for line in patch.3 {
+                            patch_file = format!("{}--{}\n", patch_file, line);
+                        }
+                    }
+                    if patch.2 != 0 {
+                        for line in patch.4 {
+                            patch_file = format!("{}++{}\n", patch_file, line);
+                        }
+                    }
+                }
+                Some(patch_file)
             }
-            _ => {}
+            _ => None,
         }
     }
 }
