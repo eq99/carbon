@@ -182,6 +182,10 @@ impl<'a> Differ<'a> {
         self.deltas.clone()
     }
 
+    /// the patch file format:
+    /// line with numbers: start line N.O.(from 0) of the changes in old file, number of line removed, number of line add
+    /// then lines followed by --: removed line in old file.
+    /// line followed by ++: added line to the old file.
     pub fn gen_patch(&mut self) -> Option<String> {
         match self.get_deltas() {
             Some(deltas) => {
