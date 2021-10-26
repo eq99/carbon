@@ -412,6 +412,18 @@ mod tests {
             );
         }
     }
+    #[test]
+    fn test_blank_line() {
+        let old = "a\nb\n\n\n";
+        let new = "c\nd\n\n";
+        let mut differ = Differ::new(old, new);
+        if let Some(patch_file) = differ.gen_patch() {
+            assert_eq!(
+                apply_patch(String::from(old), patch_file),
+                String::from(new)
+            );
+        }
+    }
 
     #[test]
     //#[ignore]
