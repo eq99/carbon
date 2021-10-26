@@ -210,7 +210,7 @@ impl<'a> Differ<'a> {
                         .collect();
                     let adds: Vec<_> = new_line_iter
                         .clone()
-                        .skip(delta.0 as usize)
+                        .skip(delta.1 as usize)
                         .take(delta.3 as usize)
                         .collect();
 
@@ -296,62 +296,134 @@ pub fn parse_patch_file(patch_file: String) -> Vec<Patch> {
     patches
 }
 
-pub fn get_new_file(old_file: String, patch: String) {}
+pub fn apply_patch(old_file: String, patch: String) -> String {
+    let mut new_file = String::from("");
+    let patches = parse_patch_file(patch);
+    let mut pre_idx = 0u16;
+    let mut old_file_iter = old_file.lines();
+    let mut multi_line = String::from("");
+    for patch in patches {
+        let Patch(start_idx, removed_line_num, added_line_num, _, added_lines) = patch;
+        if start_idx > pre_idx {
+            multi_line = old_file_iter
+                .clone()
+                .skip(pre_idx as usize)
+                .take((start_idx - pre_idx) as usize)
+                .fold(String::new(), |s, line| format!("{}{}\n", s, line));
+        }
+        if added_line_num > 0 {
+            for line in added_lines {
+                multi_line = format!("{}{}\n", multi_line, line);
+            }
+        }
+        if multi_line.len() > 0 {
+            new_file = format!("{}{}", new_file, multi_line);
+            multi_line.clear();
+        }
+        pre_idx = start_idx + removed_line_num;
+    }
+
+    multi_line = old_file_iter
+        .clone()
+        .skip(pre_idx as usize)
+        .fold(String::new(), |s, line| format!("{}{}\n", s, line));
+    format!("{}{}", new_file, multi_line)
+}
 
 #[cfg(test)]
 mod tests {
     use self::super::*;
     #[test]
-    #[ignore]
+    // #[ignore]
     fn test_mid() {
-        let mut differ_mid = Differ::new("a\nb\nc\nd\ne\nf\ng\n", "a\nb\nx\ny\nz\nd\ne\nf\ng\n");
-        if let Some(patch_file) = differ_mid.gen_patch() {
-            println!("{}", patch_file);
-            parse_patch_file(patch_file);
+        let old = "a\nb\nc\nd\ne\nf\ng\n";
+        let new = "a\nb\nx\ny\nz\nd\ne\nf\ng\n";
+        let mut differ = Differ::new(old, new);
+        if let Some(patch_file) = differ.gen_patch() {
+            assert_eq!(
+                apply_patch(String::from(old), patch_file),
+                String::from(new)
+            );
         }
     }
 
     #[test]
-    #[ignore]
+    // #[ignore]
     fn test_remove_start() {
-        let mut remove_start = Differ::new("a\na\nb\nc\nd\ne\nf", "a\nb\nc\nd\ne\nf\n");
-        //println!("{:?}", remove_start.gen_patch());
+        let old = "a\na\nb\nc\nd\ne\nf";
+        let new = "a\nb\nc\nd\ne\nf\n";
+        let mut differ = Differ::new(old, new);
+        if let Some(patch_file) = differ.gen_patch() {
+            assert_eq!(
+                apply_patch(String::from(old), patch_file),
+                String::from(new)
+            );
+        }
     }
     #[test]
-    #[ignore]
+    // #[ignore]
     fn test_add_tail() {
-        let mut add_tail = Differ::new("a\nb\nc\nd\n", "a\nb\nc\nd\nf\ng\nh\n");
-        //println!("{:?}", add_tail.gen_patch());
+        let old = "a\nb\nc\nd\n";
+        let new = "a\nb\nc\nd\nf\ng\nh\n";
+        let mut differ = Differ::new(old, new);
+        if let Some(patch_file) = differ.gen_patch() {
+            assert_eq!(
+                apply_patch(String::from(old), patch_file),
+                String::from(new)
+            );
+        }
     }
     #[test]
-    #[ignore]
+    // #[ignore]
     fn test_reverse() {
-        let mut reverse = Differ::new("a\nb\nc\nd\ne\nf\n", "d\ne\nf\na\nb\nc\n");
-        //println!("{:?}", reverse.gen_patch());
+        let old = "a\nb\nc\nd\ne\nf\n";
+        let new = "d\ne\nf\na\nb\nc\n";
+        let mut differ = Differ::new(old, new);
+        if let Some(patch_file) = differ.gen_patch() {
+            assert_eq!(
+                apply_patch(String::from(old), patch_file),
+                String::from(new)
+            );
+        }
     }
     #[test]
-    #[ignore]
+    // #[ignore]
     fn test_new_file() {
-        let mut from_scratch = Differ::new("", "a\nb\nc\n");
-        //println!("{:?}", from_scratch.gen_patch());
+        let old = "";
+        let new = "a\nc\nd\n";
+        let mut differ = Differ::new(old, new);
+        if let Some(patch_file) = differ.gen_patch() {
+            assert_eq!(
+                apply_patch(String::from(old), patch_file),
+                String::from(new)
+            );
+        }
     }
     #[test]
-    #[ignore]
+    // #[ignore]
     fn test_change_all() {
-        let mut change_all = Differ::new("a\nb\n", "c\nd\n");
-        //println!("{:?}", change_all.gen_patch());
+        let old = "a\nb\n";
+        let new = "c\nd\n";
+        let mut differ = Differ::new(old, new);
+        if let Some(patch_file) = differ.gen_patch() {
+            assert_eq!(
+                apply_patch(String::from(old), patch_file),
+                String::from(new)
+            );
+        }
     }
 
     #[test]
     //#[ignore]
     fn test_complicated() {
-        let mut more_than_one = Differ::new(
-            "a\nb\nc\nd\ne\nf\ng\nh\n",
-            "a\nb\nx\nd\ny\ny\ne\nf\ng\nh\nk\nl\n",
-        );
-        if let Some(patch_file) = more_than_one.gen_patch() {
-            println!("{}", patch_file);
-            println!("{:?}", parse_patch_file(patch_file));
+        let old = "a\nb\nc\nd\ne\nf\ng\nh\n";
+        let new = "a\nb\nx\nd\ny\ny\ne\nf\ng\nh\nk\nl\n";
+        let mut differ = Differ::new(old, new);
+        if let Some(patch_file) = differ.gen_patch() {
+            assert_eq!(
+                apply_patch(String::from(old), patch_file),
+                String::from(new)
+            );
         }
     }
 }
