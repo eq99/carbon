@@ -1,2 +1,2 @@
-# Kelp
-Kelp is a simple k-v store powered by Rust.
+# carbon
+Carbon is a simple version control system powered by Rust.
