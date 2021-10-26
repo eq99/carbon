@@ -18,7 +18,8 @@ type Delta = (u16, u16, u16, u16);
 /// line with numbers: start line N.O.(from 0) of the changes in old file, number of line removed, number of line add
 /// then lines followed by --: removed line in old file.
 /// line followed by ++: added line to the old file.
-type Patch<'a> = (u16, u16, u16, Vec<&'a str>, Vec<&'a str>);
+#[derive(Debug)]
+pub struct Patch(u16, u16, u16, Vec<String>, Vec<String>);
 
 #[derive(Debug, Default)]
 pub struct Differ<'a> {
@@ -236,7 +237,7 @@ impl<'a> Differ<'a> {
     }
 }
 
-pub fn parse_patch_file(patch_file: String) {
+pub fn parse_patch_file(patch_file: String) -> Vec<Patch> {
     let mut patches = vec![];
     let mut start_line_num = 0;
     let mut removed_line_num = 0;
@@ -246,7 +247,7 @@ pub fn parse_patch_file(patch_file: String) {
     for line in patch_file.lines() {
         if line.starts_with("\0") {
             if removed_lines.len() > 0 || added_lines.len() > 0 {
-                patches.push((
+                patches.push(Patch(
                     start_line_num,
                     removed_lines.len() as u16,
                     added_lines.len() as u16,
@@ -271,10 +272,10 @@ pub fn parse_patch_file(patch_file: String) {
             }
         } else {
             if removed_line_num > 0 {
-                removed_lines.push(line);
+                removed_lines.push(String::from(line));
                 removed_line_num -= 1;
             } else if added_line_num > 0 {
-                added_lines.push(line);
+                added_lines.push(String::from(line));
                 added_line_num -= 1;
             } else {
                 panic!("unrecognized line");
@@ -282,7 +283,7 @@ pub fn parse_patch_file(patch_file: String) {
         }
     }
     if removed_lines.len() > 0 || added_lines.len() > 0 {
-        patches.push((
+        patches.push(Patch(
             start_line_num,
             removed_lines.len() as u16,
             added_lines.len() as u16,
@@ -292,7 +293,7 @@ pub fn parse_patch_file(patch_file: String) {
         removed_lines.clear();
         added_lines.clear();
     }
-    println!("{:?}", patches);
+    patches
 }
 
 pub fn get_new_file(old_file: String, patch: String) {}
@@ -350,7 +351,7 @@ mod tests {
         );
         if let Some(patch_file) = more_than_one.gen_patch() {
             println!("{}", patch_file);
-            parse_patch_file(patch_file);
+            println!("{:?}", parse_patch_file(patch_file));
         }
     }
 }
