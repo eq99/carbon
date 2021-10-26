@@ -14,6 +14,12 @@ type Common = (u16, u16, u16);
 /// 3. line lenth added in new file
 type Delta = (u16, u16, u16, u16);
 
+/// the patch file format:
+/// line with numbers: start line N.O.(from 0) of the changes in old file, number of line removed, number of line add
+/// then lines followed by --: removed line in old file.
+/// line followed by ++: added line to the old file.
+type Patch<'a> = (u16, u16, u16, Vec<&'a str>, Vec<&'a str>);
+
 #[derive(Debug, Default)]
 pub struct Differ<'a> {
     old_content: &'a str,
@@ -211,15 +217,15 @@ impl<'a> Differ<'a> {
                 }
                 let mut patch_file = String::from("");
                 for patch in patches {
-                    patch_file = format!("{}{},{},{}\n", patch_file, patch.0, patch.1, patch.2);
+                    patch_file = format!("{}\0{},{},{}\n", patch_file, patch.0, patch.1, patch.2);
                     if patch.1 != 0 {
                         for line in patch.3 {
-                            patch_file = format!("{}--{}\n", patch_file, line);
+                            patch_file = format!("{}{}\n", patch_file, line);
                         }
                     }
                     if patch.2 != 0 {
                         for line in patch.4 {
-                            patch_file = format!("{}++{}\n", patch_file, line);
+                            patch_file = format!("{}{}\n", patch_file, line);
                         }
                     }
                 }
@@ -230,34 +236,121 @@ impl<'a> Differ<'a> {
     }
 }
 
+pub fn parse_patch_file(patch_file: String) {
+    let mut patches = vec![];
+    let mut start_line_num = 0;
+    let mut removed_line_num = 0;
+    let mut added_line_num = 0;
+    let mut removed_lines = vec![];
+    let mut added_lines = vec![];
+    for line in patch_file.lines() {
+        if line.starts_with("\0") {
+            if removed_lines.len() > 0 || added_lines.len() > 0 {
+                patches.push((
+                    start_line_num,
+                    removed_lines.len() as u16,
+                    added_lines.len() as u16,
+                    removed_lines.clone(),
+                    added_lines.clone(),
+                ));
+                removed_lines.clear();
+                added_lines.clear();
+            }
+            let nums = line
+                .strip_prefix("\0")
+                .unwrap()
+                .split(",")
+                .filter_map(|w| w.parse::<u16>().ok())
+                .collect::<Vec<_>>();
+            if nums.len() == 3 {
+                start_line_num = nums[0];
+                removed_line_num = nums[1];
+                added_line_num = nums[2];
+            } else {
+                panic!("failed to parse patch file!");
+            }
+        } else {
+            if removed_line_num > 0 {
+                removed_lines.push(line);
+                removed_line_num -= 1;
+            } else if added_line_num > 0 {
+                added_lines.push(line);
+                added_line_num -= 1;
+            } else {
+                panic!("unrecognized line");
+            }
+        }
+    }
+    if removed_lines.len() > 0 || added_lines.len() > 0 {
+        patches.push((
+            start_line_num,
+            removed_lines.len() as u16,
+            added_lines.len() as u16,
+            removed_lines.clone(),
+            added_lines.clone(),
+        ));
+        removed_lines.clear();
+        added_lines.clear();
+    }
+    println!("{:?}", patches);
+}
+
+pub fn get_new_file(old_file: String, patch: String) {}
+
 #[cfg(test)]
 mod tests {
     use self::super::*;
     #[test]
-    fn test_change() {
+    #[ignore]
+    fn test_mid() {
         let mut differ_mid = Differ::new("a\nb\nc\nd\ne\nf\ng\n", "a\nb\nx\ny\nz\nd\ne\nf\ng\n");
-        println!("{:?}", differ_mid.gen_patch());
+        if let Some(patch_file) = differ_mid.gen_patch() {
+            println!("{}", patch_file);
+            parse_patch_file(patch_file);
+        }
+    }
 
+    #[test]
+    #[ignore]
+    fn test_remove_start() {
         let mut remove_start = Differ::new("a\na\nb\nc\nd\ne\nf", "a\nb\nc\nd\ne\nf\n");
-        println!("{:?}", remove_start.gen_patch());
-
+        //println!("{:?}", remove_start.gen_patch());
+    }
+    #[test]
+    #[ignore]
+    fn test_add_tail() {
         let mut add_tail = Differ::new("a\nb\nc\nd\n", "a\nb\nc\nd\nf\ng\nh\n");
-        println!("{:?}", add_tail.gen_patch());
-
+        //println!("{:?}", add_tail.gen_patch());
+    }
+    #[test]
+    #[ignore]
+    fn test_reverse() {
         let mut reverse = Differ::new("a\nb\nc\nd\ne\nf\n", "d\ne\nf\na\nb\nc\n");
-        println!("{:?}", reverse.gen_patch());
+        //println!("{:?}", reverse.gen_patch());
+    }
+    #[test]
+    #[ignore]
+    fn test_new_file() {
+        let mut from_scratch = Differ::new("", "a\nb\nc\n");
+        //println!("{:?}", from_scratch.gen_patch());
+    }
+    #[test]
+    #[ignore]
+    fn test_change_all() {
+        let mut change_all = Differ::new("a\nb\n", "c\nd\n");
+        //println!("{:?}", change_all.gen_patch());
+    }
 
+    #[test]
+    //#[ignore]
+    fn test_complicated() {
         let mut more_than_one = Differ::new(
             "a\nb\nc\nd\ne\nf\ng\nh\n",
             "a\nb\nx\nd\ny\ny\ne\nf\ng\nh\nk\nl\n",
         );
-        println!("{:?}", more_than_one.gen_patch());
-
-        let mut from_scratch = Differ::new("", "a\nb\nc\n");
-        println!("{:?}", from_scratch.gen_patch());
-
-        println!("{:?}", from_scratch);
-        let mut change_all = Differ::new("a\nb\n", "c\nd\n");
-        println!("{:?}", change_all.gen_patch());
+        if let Some(patch_file) = more_than_one.gen_patch() {
+            println!("{}", patch_file);
+            parse_patch_file(patch_file);
+        }
     }
 }
