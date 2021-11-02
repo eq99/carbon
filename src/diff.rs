@@ -295,6 +295,20 @@ pub fn parse_patch_file(patch_file: String) -> Vec<Patch> {
     }
     patches
 }
+/// This function is used to check conflicts between main and other branch.
+/// The main branch is maintained by the manager,
+/// Others' edit may be confict with the main branch.
+/// Then the conflict will be solved by the manager.
+pub fn check_conflict(patch_other: String, patch_main: String) {
+    
+}
+
+pub fn merge_patch(old_patch: String, new_patch: String) {
+    let old_patches = parse_patch_file(old_patch);
+    let new_patches = parse_patch_file(new_patch);
+
+    println!("{:?}", old_patches);
+}
 
 pub fn apply_patch(old_file: String, patch: String) -> String {
     let mut new_file = String::from("");
