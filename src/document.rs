@@ -18,7 +18,7 @@ impl Document {
     /// Create a Document object from file.
     /// Example:
     /// ```ignore
-    /// let doc = Document::from_fs(s!(".carbon/test1.md"));
+    /// let doc = Document::from_fs(s!("tests/test1.md"));
     /// println!("{:?}", doc);
     /// ```
     pub fn from_fs(file: String) -> Self {
@@ -303,14 +303,14 @@ mod tests {
     #[test]
     // #[ignore]
     fn test_from_fs() {
-        let doc = Document::from_fs(s!(".carbon/base"));
+        let doc = Document::from_fs(s!("tests/base"));
         assert_eq!(s!("A\nB\nC\nD\nE\nF\n"), doc.to_string());
     }
     #[test]
     // #[ignore]
     fn test_change_one() {
-        let base = Document::from_fs(s!(".carbon/base"));
-        let new = Document::from_fs(s!(".carbon/change_one"));
+        let base = Document::from_fs(s!("tests/base"));
+        let new = Document::from_fs(s!("tests/change_one"));
 
         let patch = new.clone() - base.clone();
         let nnew = base.clone() + patch;
@@ -319,8 +319,8 @@ mod tests {
     #[test]
     // #[ignore]
     fn test_create_from_blank() {
-        let base = Document::from_fs(s!(".carbon/base"));
-        let blank = Document::from_fs(s!(".carbon/blank"));
+        let base = Document::from_fs(s!("tests/base"));
+        let blank = Document::from_fs(s!("tests/blank"));
 
         let patch = base.clone() - blank.clone();
         let nnew = blank.clone() + patch;
@@ -330,8 +330,8 @@ mod tests {
     #[test]
     // #[ignore]
     fn test_complex() {
-        let base = Document::from_fs(s!(".carbon/base"));
-        let new = Document::from_fs(s!(".carbon/complex"));
+        let base = Document::from_fs(s!("tests/base"));
+        let new = Document::from_fs(s!("tests/complex"));
 
         let patch = new.clone() - base.clone();
         let nnew = base.clone() + patch;
@@ -340,8 +340,8 @@ mod tests {
     #[test]
     // #[ignore]
     fn test_change_all() {
-        let base = Document::from_fs(s!(".carbon/base"));
-        let new = Document::from_fs(s!(".carbon/change_all"));
+        let base = Document::from_fs(s!("tests/base"));
+        let new = Document::from_fs(s!("tests/change_all"));
 
         let patch = new.clone() - base.clone();
         let nnew = base.clone() + patch;
