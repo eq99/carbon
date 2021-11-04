@@ -22,23 +22,41 @@ pub type Change = (usize, usize, usize, usize, Vec<String>, Vec<String>);
 pub struct Patch(Vec<Change>);
 
 impl Patch {
+    /// create Pathc from changes' vec
+    /// example:
+    /// ```ignore
+    /// let mut changes: Vec<Change> = vec![];
+    /// changes.push((0, 0, 0, 0, removed_lines, added_lines));
+    /// Patch::from_vec(changes)
+    /// ```
     pub fn from_vec(vec: Vec<Change>) -> Self {
         Self(vec)
     }
+
+    /// This method is useful to get ref of inner Vec
+    /// example:
+    /// ```ignore
+    /// let patch = Patch::from_fs(s!("tests/patch"));
+    /// let patch_vec_ref = patch.as_vec_ref();
+    /// for patch in patch_vec_ref {
+    ///     println!("{:?}", patch);
+    /// }
+    /// ```
     pub fn as_vec_ref(&self) -> &Vec<Change> {
         let Patch(vec) = self;
         vec
     }
 }
-/*
-impl Add for Patch {
-    type Output = Self;
-    fn add(self, doc: Document) -> Self {
-        let lines = vec![];
-        Self(lines)
+
+impl Add<Document> for Patch {
+    type Output = Document;
+    /// You can read Add trait for Document.
+    /// old_doc + patch = new_doc <=> patch + old_doc = new_doc
+    fn add(self, doc: Document) -> Document {
+        doc + self
     }
 }
-*/
+
 #[cfg(test)]
 mod tests {
     use self::super::*;

@@ -18,8 +18,8 @@ impl Document {
     /// Create a Document object from file.
     /// Example:
     /// ```ignore
-    /// let doc = Document::from_fs(s!("tests/test1.md"));
-    /// println!("{:?}", doc);
+    /// let doc = Document::from_fs(s!("tests/base"));
+    /// assert_eq!(s!("A\nB\nC\nD\nE\nF\n"), doc.to_string());
     /// ```
     pub fn from_fs(file: String) -> Self {
         let input = File::open(file).unwrap();
@@ -32,11 +32,16 @@ impl Document {
 
     /// Display lines with number.
     /// It's useful when debug, example:
+    /// ```ignore
+    /// let doc = Document::from_fs(s!("tests/base"));
+    /// doc.show();
+    /// ```
     /// 0. A
     /// 1. B
     /// 2. C
     /// 3. D
     /// 4. E
+    /// 5. F
     pub fn show(&self) {
         let Document(lines) = self;
         for line in lines.iter().enumerate() {
@@ -44,11 +49,26 @@ impl Document {
         }
     }
 
+    /// This method is useful to get ref of inner Vec
+    /// example:
+    /// ```ignore
+    /// let doc = Document::from_fs(s!("tests/base"));
+    /// let vec_ref = doc.as_vec_ref();
+    /// for line in vec_ref {
+    ///     println!("{:?}", line);
+    /// }
+    /// ```
     pub fn as_vec_ref(&self) -> &Vec<String> {
         let Self(vec) = self;
         vec
     }
 
+    /// Convet vec to string
+    /// example:
+    /// ```ignore
+    /// let doc = Document::from_fs(s!("tests/base"));
+    /// assert_eq!(s!("A\nB\nC\nD\nE\nF\n"), doc.to_string());
+    /// ```
     pub fn to_string(&self) -> String {
         self.as_vec_ref()
             .iter()
@@ -263,7 +283,11 @@ impl Sub for Document {
 
 impl Add<Patch> for Document {
     type Output = Self;
-    /// Aply patch to document.
+    /// Apply patch to old document.
+    /// We can describe this procedure as:
+    /// new_doc - old_doc = patch
+    /// old_doc + patch = new_doc
+    /// version1 + patch1 + patch2 = version3
     fn add(self, patch: Patch) -> Self {
         let mut lines = vec![];
         let old_vec_ref = self.as_vec_ref();
