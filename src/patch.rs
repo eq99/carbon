@@ -46,6 +46,19 @@ impl Patch {
         let Patch(vec) = self;
         vec
     }
+
+    /// Write Patch object to file system.
+    /// Step 1: calculate content sha-256 hash
+    /// Step 2: use first two hex code as folder, the rest as file name.
+    /// This idea comes from git.
+    pub fn write_to_store(&self) {
+        todo!()
+    }
+
+    /// Create a Patch object from file system.
+    pub fn read_from_store(hash: String) -> Self {
+        todo!()
+    }
 }
 
 impl Add<Document> for Patch {

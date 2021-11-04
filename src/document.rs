@@ -74,6 +74,23 @@ impl Document {
             .iter()
             .fold(String::new(), |s, line| format!("{}{}\n", s, line))
     }
+
+    /// Write Document to file system.
+    /// Step 1: calculate content sha-256 hash
+    /// Step 2: use first two hex code as folder, the rest as file name.
+    /// This idea comes from git.
+    pub fn write_to_store(&self) {
+        // let data = "Some data!";
+        // fs::write("/tmp/foo", data).expect("Unable to write file");
+        todo!()
+    }
+
+    /// Create a Document from store.
+    pub fn read_from_store(hash: String) -> Self {
+        // let lines = vec![];
+        // Self(lines)
+        todo!()
+    }
 }
 
 impl Sub for Document {
