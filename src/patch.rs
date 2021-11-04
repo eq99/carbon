@@ -7,19 +7,6 @@ use std::io::{BufRead, BufReader, Error, Write};
 use std::ops::{Add, Sub};
 
 use crate::document::Document;
-/// commons: the common lines of two files.
-/// 2^16 = 65536, The number of lines in a file is enough.
-/// 0. line_num of common part in old file,
-/// 1. line_num of common part in new file,
-/// 2. length of the common part
-type Common = (u16, u16, u16);
-
-/// Delta: the changes of two files.
-/// 0. start line number of Delta in old file,
-/// 1. start line number of Delta in new file,
-/// 2. line lenth removed in old file,
-/// 3. line lenth added in new file
-type Diff = (u16, u16, u16, u16);
 
 /// An edit makes a Change.
 /// 0. line_num in old document
@@ -37,6 +24,10 @@ pub struct Patch(Vec<Change>);
 impl Patch {
     pub fn from_vec(vec: Vec<Change>) -> Self {
         Self(vec)
+    }
+    pub fn as_vec_ref(&self) -> &Vec<Change> {
+        let Patch(vec) = self;
+        vec
     }
 }
 /*

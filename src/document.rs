@@ -11,7 +11,7 @@ use crate::patch::{Change, Patch};
 
 /// The Document struct reprents a real word document.
 /// Because operations are line based, We use a Vec<String> to store lines.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Document(Vec<String>);
 
 impl Document {
@@ -48,6 +48,12 @@ impl Document {
         let Self(vec) = self;
         vec
     }
+
+    pub fn to_string(&self) -> String {
+        self.as_vec_ref()
+            .iter()
+            .fold(String::new(), |s, line| format!("{}{}\n", s, line))
+    }
 }
 
 impl Sub for Document {
@@ -58,7 +64,7 @@ impl Sub for Document {
     /// 1. compare all sub string of old string with new string.
     /// 2. compare all sub string of new string with old string symmetrically.
     ///
-    /// Step 2: Choose the right common parts greedily by common_len.
+    /// Step 2: Choose the right common parts greedily by common_line_count.
     ///
     /// Step 3: Construct the changes.
     ///
@@ -72,58 +78,59 @@ impl Sub for Document {
     /// @param{other}: the old document
     fn sub(self, other: Self) -> Self::Output {
         let this_vec_ref = self.as_vec_ref();
-        let other_vec_ref = self.as_vec_ref();
+        let other_vec_ref = other.as_vec_ref();
 
         // step 1: Find common parts
         let mut commons = vec![];
-        let mut common_len = 0;
+        let mut common_line_count = 0;
         let mut this_line_num = 0;
         let mut other_line_num = 0;
-        let mut other_total_num = this_vec_ref.len();
-        let mut this_total_num = other_vec_ref.len();
+        let mut other_lines_count = other_vec_ref.len();
+        let mut this_lines_count = this_vec_ref.len();
         // diagonal and upper
-        for i in 0..other_total_num {
-            for j in 0..this_total_num {
-                if i + j < other_total_num
-                    && (this_vec_ref[j].len() == other_vec_ref[i + j].len()
-                        && this_vec_ref[j] == other_vec_ref[i + j])
-                {
-                    if common_len == 0 {
-                        this_line_num = i + j;
-                        other_line_num = j;
-                    }
-                    common_len += 1;
-                } else {
-                    if common_len > 0 {
-                        commons.push((other_line_num, this_line_num, common_len));
-                        common_len = 0;
-                    }
-                }
-            }
-        }
-
-        // below diagonal
-        for i in 1..this_total_num {
-            for j in 0..other_total_num {
-                if i + j < this_total_num
+        for i in 0..this_lines_count {
+            for j in 0..other_lines_count {
+                if i + j < this_lines_count
                     && (this_vec_ref[i + j].len() == other_vec_ref[j].len()
                         && this_vec_ref[i + j] == other_vec_ref[j])
                 {
-                    if common_len == 0 {
+                    if common_line_count == 0 {
+                        this_line_num = i + j;
+                        other_line_num = j;
+                    }
+                    common_line_count += 1;
+                } else {
+                    if common_line_count > 0 {
+                        commons.push((other_line_num, this_line_num, common_line_count));
+                        common_line_count = 0;
+                    }
+                }
+            }
+        }
+        // lower diagonal
+        for i in 1..other_lines_count {
+            for j in 0..this_lines_count {
+                if i + j < other_lines_count
+                    && (this_vec_ref[j].len() == other_vec_ref[i + j].len()
+                        && this_vec_ref[j] == other_vec_ref[i + j])
+                {
+                    if common_line_count == 0 {
                         this_line_num = j;
                         other_line_num = i + j;
                     }
-                    common_len += 1;
+                    common_line_count += 1;
                 } else {
-                    if common_len > 0 {
-                        commons.push((other_line_num, this_line_num, common_len));
-                        common_len = 0;
+                    if common_line_count > 0 {
+                        commons.push((other_line_num, this_line_num, common_line_count));
+                        common_line_count = 0;
                     }
                 }
             }
         }
 
-        // Step 2: choose the right parts
+        // println!("Commons: {:?}", commons);
+
+        // Step 2: pick out the right parts
         commons.sort_by_key(|c| -(c.2 as i64));
         let mut picked = vec![];
         let mut pickable = true;
@@ -153,20 +160,24 @@ impl Sub for Document {
         }
         picked.sort_by_key(|c| c.0);
 
+        // println!("Picked: {:?}", picked);
+
         // step 3,4: construct the changes and return patch
+        // Note:
+        // Before you read the following code, make sure you have read the doc for type Change in patch.rs
         let mut changes: Vec<Change> = vec![];
         if picked.len() < 1 {
-            if this_total_num > 0 {
-                changes = if other_total_num == 0 {
+            if this_lines_count > 0 {
+                changes = if other_lines_count == 0 {
                     // create from new file
-                    vec![(0, 0, 0, this_total_num, vec![], (*this_vec_ref).clone())]
+                    vec![(0, 0, 0, this_lines_count, vec![], (*this_vec_ref).clone())]
                 } else {
                     // changed all.
                     vec![(
                         0,
-                        other_total_num,
+                        other_lines_count,
                         0,
-                        this_total_num,
+                        this_lines_count,
                         (*other_vec_ref).clone(),
                         (*this_vec_ref).clone(),
                     )]
@@ -176,28 +187,36 @@ impl Sub for Document {
                 panic!("new file should not be empty");
             }
         }
+
         // 0<-change->picked[0]<-change->picked[1]<-change->...common_last<-change->end
-        if picked[0].0 > 0 || picked[0].2 > 0 {
+
+        // case 1:
+        //   0 1 2 3 4 5      0 1 2 3 4 5
+        // 0                0   \
+        // 1\               1    \
+        // 2 \              2     \
+        // 3  \             3      \
+        if picked[0].0 > 0 || picked[0].1 > 0 {
             let mut removed_lines = vec![];
             for idx in 0..picked[0].0 {
                 removed_lines.push(other_vec_ref[idx].clone());
             }
             let mut added_lines = vec![];
-            for idx in 0..picked[0].2 {
+            for idx in 0..picked[0].1 {
                 added_lines.push(this_vec_ref[idx].clone());
             }
-            changes.push((0, picked[0].0, 0, picked[0].2, removed_lines, added_lines));
+            changes.push((0, picked[0].0, 0, picked[1].1, removed_lines, added_lines));
         }
         //  \
         //   \
-        //    \ _ _ 
+        //    \ _ _
         //         \
         //          \
         //           \
         for idx in 0..picked.len() - 1 {
             let end_old = picked[idx].0 + picked[idx].2;
             let end_new = picked[idx].1 + picked[idx].2;
-            if picked[idx + 1].0 > end_old || picked[idx + 1].2 > end_new {
+            if picked[idx + 1].0 > end_old || picked[idx + 1].1 > end_new {
                 let mut removed_lines = vec![];
                 for idx in end_old..picked[idx + 1].0 {
                     removed_lines.push(other_vec_ref[idx].clone());
@@ -220,20 +239,20 @@ impl Sub for Document {
         let last_ele = picked[picked.len() - 1];
         let end_old = last_ele.0 + last_ele.2;
         let end_new = last_ele.1 + last_ele.2;
-        if other_total_num > end_old || this_total_num > end_new {
+        if other_lines_count > end_old || this_lines_count > end_new {
             let mut removed_lines = vec![];
             for idx in end_old..other_line_num {
                 removed_lines.push(other_vec_ref[idx].clone());
             }
             let mut added_lines = vec![];
-            for idx in end_new..this_total_num {
+            for idx in end_new..this_lines_count {
                 added_lines.push(this_vec_ref[idx].clone());
             }
             changes.push((
                 end_old,
-                other_total_num - end_old,
+                other_lines_count - end_old,
                 end_new,
-                this_total_num - end_new,
+                this_lines_count - end_new,
                 removed_lines,
                 added_lines,
             ));
@@ -244,9 +263,36 @@ impl Sub for Document {
 
 impl Add<Patch> for Document {
     type Output = Self;
-    /// 
-    fn add(self, pathc: Patch) -> Self {
-        let lines = vec![];
+    /// Aply patch to document.
+    fn add(self, patch: Patch) -> Self {
+        let mut lines = vec![];
+        let old_vec_ref = self.as_vec_ref();
+        let patch_vec_ref = patch.as_vec_ref();
+        let mut pre_line_num = 0;
+
+        for idx in 0..patch_vec_ref.len() {
+            let (
+                old_line_num,
+                removed_line_count,
+                new_line_num,
+                added_line_count,
+                removed_lines,
+                mut added_lines,
+            ) = patch_vec_ref[idx].clone();
+
+            if old_line_num > pre_line_num {
+                for jdx in pre_line_num..old_line_num {
+                    lines.push(old_vec_ref[jdx].clone());
+                }
+            }
+            lines.append(&mut added_lines);
+
+            pre_line_num = old_line_num + removed_line_count;
+        }
+
+        for idx in pre_line_num..old_vec_ref.len() {
+            lines.push(old_vec_ref[idx].clone());
+        }
         Self(lines)
     }
 }
@@ -257,8 +303,48 @@ mod tests {
     #[test]
     // #[ignore]
     fn test_from_fs() {
-        let doc = Document::from_fs(s!(".carbon/test1.md"));
-        doc.show();
-        println!("{:?}", doc);
+        let doc = Document::from_fs(s!(".carbon/base"));
+        assert_eq!(s!("A\nB\nC\nD\nE\nF\n"), doc.to_string());
+    }
+    #[test]
+    // #[ignore]
+    fn test_change_one() {
+        let base = Document::from_fs(s!(".carbon/base"));
+        let new = Document::from_fs(s!(".carbon/change_one"));
+
+        let patch = new.clone() - base.clone();
+        let nnew = base.clone() + patch;
+        assert_eq!(new.to_string(), nnew.to_string());
+    }
+    #[test]
+    // #[ignore]
+    fn test_create_from_blank() {
+        let base = Document::from_fs(s!(".carbon/base"));
+        let blank = Document::from_fs(s!(".carbon/blank"));
+
+        let patch = base.clone() - blank.clone();
+        let nnew = blank.clone() + patch;
+        assert_eq!(base.to_string(), nnew.to_string());
+    }
+
+    #[test]
+    // #[ignore]
+    fn test_complex() {
+        let base = Document::from_fs(s!(".carbon/base"));
+        let new = Document::from_fs(s!(".carbon/complex"));
+
+        let patch = new.clone() - base.clone();
+        let nnew = base.clone() + patch;
+        assert_eq!(new.to_string(), nnew.to_string());
+    }
+    #[test]
+    // #[ignore]
+    fn test_change_all() {
+        let base = Document::from_fs(s!(".carbon/base"));
+        let new = Document::from_fs(s!(".carbon/change_all"));
+
+        let patch = new.clone() - base.clone();
+        let nnew = base.clone() + patch;
+        assert_eq!(new.to_string(), nnew.to_string());
     }
 }
