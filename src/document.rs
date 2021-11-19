@@ -92,7 +92,7 @@ impl Document {
         todo!()
     }
 }
-
+ 
 impl Sub for Document {
     type Output = Patch;
     /// Diff of two document
